@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Белый круг-подложка -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,54 A30,30 0 1,0 84,54 A30,30 0 1,0 24,54 Z" />
+    <!-- Треугольник play цветом фона -->
+    <path
+        android:fillColor="#3A1FB0"
+        android:pathData="M46,40 L46,68 L70,54 Z" />
+</vector>

@@ -3,6 +3,9 @@
 build/
 */build/
 
+# Hand-off scratch (built APKs, debug screenshots) — not source
+research-spike/dist/
+
 # Local config
 local.properties
 
