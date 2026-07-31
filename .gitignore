@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+*/build/
+
+# Local config
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APK / build artifacts (kept only in dist/ for hand-off, see !dist/ rule above)
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Logs
+*.log
+
+# Keystores (never commit signing keys)
+*.jks
+*.keystore
