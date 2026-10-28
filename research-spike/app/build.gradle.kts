@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.dualspike"
         minSdk = 26
         targetSdk = 33
-        versionCode = 1
-        versionName = "0.1-spike"
+        versionCode = 3
+        versionName = "0.3"
     }
 
     buildTypes {

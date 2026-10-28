@@ -1,15 +1,20 @@
 package com.example.dualspike
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -18,7 +23,9 @@ import android.widget.ListView
 import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
@@ -68,6 +75,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var durationText: TextView
     private lateinit var seekBarPosition: SeekBar
     private lateinit var playButton: Button
+    private lateinit var volumeSeekBar: SeekBar
+    private lateinit var volumeText: TextView
+
+    // ACTION_AUDIO_BECOMING_NOISY приходит при отключении проводных и Bluetooth-наушников.
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                pausePlayback()
+            }
+        }
+    }
 
     private val positionHandler = Handler(Looper.getMainLooper())
     private val positionUpdater = object : Runnable {
@@ -136,10 +154,17 @@ class MainActivity : AppCompatActivity() {
         trackListView.setOnItemClickListener { _, _, position, _ ->
             playTrack(tracks[position])
         }
+        trackListView.setOnItemLongClickListener { _, _, position, _ ->
+            confirmDeleteTrack(tracks[position])
+            true
+        }
 
-        findViewById<SeekBar>(R.id.bgVolumeSeekBar).setOnSeekBarChangeListener(
+        volumeSeekBar = findViewById(R.id.bgVolumeSeekBar)
+        volumeText = findViewById(R.id.volumeText)
+        volumeSeekBar.setOnSeekBarChangeListener(
             object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                    volumeText.text = "$progress%"
                     val volume = progress / 100f
                     mediaPlayer?.setVolume(volume, volume)
                 }
@@ -147,6 +172,16 @@ class MainActivity : AppCompatActivity() {
                 override fun onStopTrackingTouch(seekBar: SeekBar) {}
             }
         )
+        // Программное изменение progress тоже вызывает onProgressChanged, так что
+        // метка и громкость плеера обновятся сами.
+        findViewById<Button>(R.id.volumeDownButton).setOnClickListener {
+            volumeSeekBar.progress = (volumeSeekBar.progress - VOLUME_STEP).coerceAtLeast(0)
+        }
+        findViewById<Button>(R.id.volumeUpButton).setOnClickListener {
+            volumeSeekBar.progress = (volumeSeekBar.progress + VOLUME_STEP).coerceAtMost(100)
+        }
+
+        registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
 
         seekBarPosition.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
@@ -300,13 +335,68 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (player.isPlaying) {
-            player.pause()
-            playButton.text = "Play"
-            releaseForeground(OWNER_PLAYBACK)
+            pausePlayback()
         } else {
             acquireForeground(OWNER_PLAYBACK)
             player.start()
             playButton.text = "Пауза"
+        }
+    }
+
+    private fun pausePlayback() {
+        val player = mediaPlayer ?: return
+        if (player.isPlaying) {
+            player.pause()
+            playButton.text = "Play"
+            releaseForeground(OWNER_PLAYBACK)
+        }
+    }
+
+    private fun confirmDeleteTrack(track: Track) {
+        AlertDialog.Builder(this)
+            .setTitle(track.name)
+            .setItems(arrayOf("Убрать из списка", "Удалить файл с устройства")) { _, which ->
+                removeTrack(track, deleteFile = which == 1)
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
+    private fun removeTrack(track: Track, deleteFile: Boolean) {
+        if (currentTrackUri == track.uri) {
+            mediaPlayer?.release()
+            mediaPlayer = null
+            currentTrackUri = null
+            releaseForeground(OWNER_PLAYBACK)
+            playButton.text = "Play"
+            nowPlayingText.text = "ничего не играет"
+            seekBarPosition.progress = 0
+            positionText.text = formatTime(0)
+            durationText.text = formatTime(0)
+        }
+
+        val message = when {
+            !deleteFile -> "Убрано из списка"
+            deleteTrackFile(track.uri) -> "Файл удалён"
+            else -> "Убрано из списка, но файл удалить не удалось (нет прав)"
+        }
+
+        tracks.remove(track)
+        saveLibrary()
+        refreshTrackListAdapter()
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun deleteTrackFile(uri: Uri): Boolean {
+        return try {
+            when {
+                uri.scheme == "file" -> uri.path?.let { java.io.File(it).delete() } ?: false
+                DocumentsContract.isDocumentUri(this, uri) -> DocumentsContract.deleteDocument(contentResolver, uri)
+                else -> contentResolver.delete(uri, null, null) > 0
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "failed to delete $uri", e)
+            false
         }
     }
 
@@ -329,7 +419,7 @@ class MainActivity : AppCompatActivity() {
             setOnPreparedListener {
                 Log.d(tag, "track prepared, starting (no audio focus requested)")
                 durationText.text = formatTime(it.duration)
-                val volume = findViewById<SeekBar>(R.id.bgVolumeSeekBar).progress / 100f
+                val volume = volumeSeekBar.progress / 100f
                 it.setVolume(volume, volume)
                 it.start()
                 playButton.text = "Пауза"
@@ -355,6 +445,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterReceiver(noisyReceiver)
         positionHandler.removeCallbacks(positionUpdater)
         mediaPlayer?.release()
         mediaPlayer = null
@@ -367,6 +458,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREF_LIBRARY = "library"
         private const val OWNER_PLAYBACK = "playback"
+        private const val VOLUME_STEP = 1
     }
 }
 

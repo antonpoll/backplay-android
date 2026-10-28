@@ -143,13 +143,17 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="6dp">
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical">
 
-        <TextView
+        <Button
+            android:id="@+id/volumeDownButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:text="Громкость" />
+            android:minWidth="0dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="−" />
 
         <SeekBar
             android:id="@+id/bgVolumeSeekBar"
@@ -158,6 +162,23 @@
             android:layout_weight="1"
             android:max="100"
             android:progress="10" />
+
+        <Button
+            android:id="@+id/volumeUpButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="+" />
+
+        <TextView
+            android:id="@+id/volumeText"
+            android:layout_width="48dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:textColor="#FFFFFF"
+            android:text="10%" />
     </LinearLayout>
 
 </LinearLayout>
